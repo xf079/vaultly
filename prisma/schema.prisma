@@ -1,0 +1,159 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+/**
+ * 用户
+ */
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  // sha256(email + APP_SALT)
+  emailHash String   @unique
+  // Base64(32 bytes)
+  salt      String
+  // has2fa
+  has2fa    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tokens    Token[]
+  devices   Device[]
+  items     Item[]
+  auditLogs AuditLog[]
+
+  @@map("users")
+}
+
+/**
+ * 认证令牌
+ */
+model Token {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      TokenType
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([token])
+  @@index([userId, type])
+  @@map("tokens")
+}
+
+model Item {
+  id        Int     @id @default(autoincrement())
+  // 'password', 'note', 'totp', etc.
+  type      String
+  // Base64 encrypted JSON
+  data      String
+  // Base64 IV
+  iv        String
+  // ONLY non-sensitive fields!
+  metadata  Json?
+  isDeleted Boolean @default(false)
+  // version
+  version   Int     @default(1)
+  // parentId
+  parentId  Int?
+  userId    Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, isDeleted])
+  @@index([type])
+  @@index([parentId])
+  @@map("items")
+}
+
+/**
+ * 用户登录设备
+ */
+model Device {
+  id           String   @id @default(uuid())
+  userId       Int
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceName   String?
+  userAgent    String?
+  // sha256(ip + SESSION_SALT)
+  ipHash       String?
+  lastActiveAt DateTime @default(now())
+  isRevoked    Boolean  @default(false)
+  expiresAt    DateTime
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([isRevoked, expiresAt])
+  @@map("devices")
+}
+
+/**
+ * 审计日志
+ */
+model AuditLog {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // e.g., 'login', 'item.created'
+  action       String
+  resourceType String?
+  resourceId   Int?
+  // { location: "US", ... }
+  metadata     Json?
+  // hashed if stored
+  ipAddress    String?
+  timestamp    DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([timestamp])
+  @@map("audit_logs")
+}
+
+/**
+ * 分享链接
+ */
+model ShareLink {
+  id            Int      @id @default(autoincrement())
+  // 随机 token (64-char hex or base64)
+  token         String   @unique
+  // 前端用一次性密钥加密
+  encryptedData String
+  // Base64 IV
+  iv            String
+  // 过期时间
+  expiresAt     DateTime
+  // 最大访问次数
+  maxViews      Int      @default(1)
+  // 已访问次数
+  viewCount     Int      @default(0)
+  // 是否已使用
+  isConsumed    Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([expiresAt])
+  @@map("share_links")
+}
+
+/**
+ * 令牌类型
+ */
+enum TokenType {
+  EMAIL_VERIFY
+  PASSWORD_RESET
+}

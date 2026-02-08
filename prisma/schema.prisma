@@ -1,159 +1,353 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// Prisma schema - Vaultly 零知识密码保险库
+// https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
 }
 
 datasource db {
   provider = "sqlite"
 }
 
-/**
- * 用户
- */
-model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  // sha256(email + APP_SALT)
-  emailHash String   @unique
-  // Base64(32 bytes)
-  salt      String
-  // has2fa
-  has2fa    Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  tokens    Token[]
-  devices   Device[]
-  items     Item[]
-  auditLogs AuditLog[]
-
-  @@map("users")
+// --- 账户状态 ---
+enum AccountStatus {
+  ACTIVE             // 正常
+  LOCKED_TEMPORARY   // 临时锁定（暴力破解防护）
+  LOCKED_PERMANENT   // 永久锁定（需人工干预）
+  SUSPENDED          // 合规暂停
 }
 
-/**
- * 认证令牌
- */
-model Token {
-  id        Int       @id @default(autoincrement())
-  userId    Int
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type      TokenType
-  token     String    @unique
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
-
-  @@index([token])
-  @@index([userId, type])
-  @@map("tokens")
+// --- 审计事件类型（SOC 2 合规） ---
+enum AuditEventType {
+  ACCOUNT_CREATED
+  ACCOUNT_DELETED
+  LOGIN_SUCCESS
+  LOGIN_FAILED
+  LOGOUT
+  SESSION_REFRESHED
+  PASSWORD_RESET_INITIATED
+  PASSWORD_RESET_COMPLETED
+  DEVICE_TRUSTED
+  DEVICE_UNTRUSTED
+  DEVICE_REMOVED
+  SECRET_KEY_VERIFICATION_FAILED
+  SRP_VERIFICATION_FAILED
+  RATE_LIMIT_TRIGGERED
+  EMERGENCY_KIT_DOWNLOADED
 }
 
-model Item {
-  id        Int     @id @default(autoincrement())
-  // 'password', 'note', 'totp', etc.
-  type      String
-  // Base64 encrypted JSON
-  data      String
-  // Base64 IV
-  iv        String
-  // ONLY non-sensitive fields!
-  metadata  Json?
-  isDeleted Boolean @default(false)
-  // version
-  version   Int     @default(1)
-  // parentId
-  parentId  Int?
-  userId    Int
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id])
-
-  @@index([userId, isDeleted])
-  @@index([type])
-  @@index([parentId])
-  @@map("items")
+// --- 设备平台 ---
+enum Platform {
+  IOS
+  ANDROID
+  MACOS
+  WINDOWS
+  LINUX
+  WEB
 }
 
-/**
- * 用户登录设备
- */
+// --- 账户主表（零知识：服务端不接触明文密码） ---
+model Account {
+  id                   String @id @default(uuid())
+  email                String @unique
+  srpSalt              String   // SRP 盐，32 字节
+  srpVerifier          String   // SRP 验证子，384 字节 (3072 bit)
+  secretKeyFingerprint String   // Secret Key 的 SHA256，服务端无明文
+  kdfIterations        Int      @default(100000)  // PBKDF2 迭代次数
+
+  status              AccountStatus @default(ACTIVE)
+  lockedUntil         DateTime?     // 临时锁定到期
+  failedLoginAttempts Int           @default(0)
+
+  emailVerifiedAt        DateTime?
+  lastPasswordChangeAt   DateTime  @default(now())
+  emergencyKitDownloaded Boolean   @default(false)  // 是否已下载 Emergency Kit
+
+  devices            Device[]
+  auditLogs          AuditLog[]
+  sessionRevocations SessionRevocation[]
+  items              Item[]  @relation("ItemsCreatedBy")
+  itemsUpdated       Item[]  @relation("ItemsUpdatedBy")
+  sharesInitiated    Share[] @relation("SharedBy")
+  sharesReceived     Share[] @relation("SharedWith")
+  publicKeys         PublicKey[]
+  trashEntries       Trash[]
+  vaults             Vault[]
+  linkedItems        Item[]  // 通过 accountId 关联的条目
+
+  @@index([email])
+  @@index([status, lockedUntil])
+  @@map("accounts")
+}
+
+// --- 可信设备 ---
 model Device {
-  id           String   @id @default(uuid())
-  userId       Int
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  deviceName   String?
-  userAgent    String?
-  // sha256(ip + SESSION_SALT)
-  ipHash       String?
-  lastActiveAt DateTime @default(now())
-  isRevoked    Boolean  @default(false)
-  expiresAt    DateTime
+  id        String     @id @default(uuid())
+  accountId String
+  publicKey PublicKey?
 
-  createdAt DateTime @default(now())
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
-  @@index([isRevoked, expiresAt])
+  fingerprint String @unique  // 设备指纹，64 字符十六进制
+
+  name             String
+  platform         Platform
+  osVersion        String?
+  appVersion       String?
+  biometricEnabled Boolean  @default(false)
+  pushToken        String?   // APNs/FCM，加密存储
+
+  trustedAt    DateTime @default(now())
+  trustedUntil DateTime  // 信任有效期，通常 trustedAt + 1 年
+  lastSeenAt   DateTime @default(now())
+  isCurrentSession Boolean @default(false)
+
+  @@unique([accountId, fingerprint])
+  @@index([accountId])
+  @@index([trustedUntil])
   @@map("devices")
 }
 
-/**
- * 审计日志
- */
+// --- 审计日志（SOC 2 合规） ---
 model AuditLog {
-  id           Int      @id @default(autoincrement())
-  userId       Int
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  // e.g., 'login', 'item.created'
-  action       String
-  resourceType String?
-  resourceId   Int?
-  // { location: "US", ... }
-  metadata     Json?
-  // hashed if stored
-  ipAddress    String?
-  timestamp    DateTime @default(now())
+  id        String   @id @default(uuid())
+  accountId String?  // 可为空，如注册前事件
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
 
-  @@index([userId])
-  @@index([action])
-  @@index([timestamp])
-  @@map("audit_logs")
-}
-
-/**
- * 分享链接
- */
-model ShareLink {
-  id            Int      @id @default(autoincrement())
-  // 随机 token (64-char hex or base64)
-  token         String   @unique
-  // 前端用一次性密钥加密
-  encryptedData String
-  // Base64 IV
-  iv            String
-  // 过期时间
-  expiresAt     DateTime
-  // 最大访问次数
-  maxViews      Int      @default(1)
-  // 已访问次数
-  viewCount     Int      @default(0)
-  // 是否已使用
-  isConsumed    Boolean  @default(false)
+  eventType AuditEventType
+  ipAddress String
+  userAgent String?
+  metadata  Json?    // 脱敏元数据，如 deviceFingerprintSuffix
 
   createdAt DateTime @default(now())
 
-  @@index([token])
-  @@index([expiresAt])
-  @@map("share_links")
+  @@index([accountId, createdAt])
+  @@index([eventType, createdAt])
+  @@index([ipAddress])
+  @@map("audit_logs")
 }
 
-/**
- * 令牌类型
- */
-enum TokenType {
-  EMAIL_VERIFY
-  PASSWORD_RESET
+// --- 会话吊销（JWT jti 黑名单，生产建议用 Redis） ---
+model SessionRevocation {
+  id        String  @id @default(uuid())
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  tokenJti   String   @unique  // JWT jti
+  revokedAt DateTime @default(now())
+  expiresAt DateTime  // 原令牌过期时间，用于清理
+
+  @@index([tokenJti])
+  @@index([expiresAt])
+  @@map("session_revocations")
+}
+
+// --- 速率限制（应用层备用，生产建议 Redis） ---
+model RateLimitCounter {
+  id       String   @id @default(uuid())
+  key      String   @unique  // 如 "auth:login:ip:192.168.1.1"
+  attempts Int      @default(1)
+  resetAt  DateTime
+
+  @@index([resetAt])
+  @@map("rate_limit_counters")
+}
+
+// --- 保险库类型 ---
+enum VaultType {
+  PERSONAL       // 个人
+  SHARED         // 共享（团队/家庭）
+  ORGANIZATION   // 组织
+}
+
+// --- 条目分类 ---
+enum ItemCategory {
+  LOGIN
+  CREDIT_CARD
+  SECURE_NOTE
+  IDENTITY
+  BANK_ACCOUNT
+  SERVER
+  DATABASE
+  API_KEY
+  WIFI
+  PASSPORT
+  LICENSE
+}
+
+// --- 保险库权限 ---
+enum VaultPermission {
+  VIEW   // 仅查看
+  EDIT   // 增删改条目
+  MANAGE // 成员与权限
+  OWNER  // 含删除保险库
+}
+
+// --- 共享状态 ---
+enum ShareStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  REVOKED
+  EXPIRED
+}
+
+// --- 回收站项类型 ---
+enum TrashItemType {
+  VAULT
+  ITEM   // 原 VAULT_ITEM
+}
+
+// --- 保险库主表（名称/描述/主钥均客户端加密） ---
+model Vault {
+  id        String  @id @default(uuid())
+  accountId String  // 创建者
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  nameEncrypted        String   // 保险库名称，AES-GCM + Base64
+  descriptionEncrypted String?
+  type                 VaultType @default(PERSONAL)
+
+  vaultKeyEncrypted String  // 主密钥，由 Account Key 加密；共享时再加密存 Share
+
+  isFavorite Boolean   @default(false)
+  isArchived Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?  // 软删除
+
+  items        Item[]
+  shares       Share[]
+  trashEntries Trash[]
+
+  @@index([accountId, deletedAt])
+  @@index([type, accountId])
+  @@map("vaults")
+}
+
+// --- 保险库条目（payload 客户端加密 JSON） ---
+model Item {
+  id String @id @default(uuid())
+
+  vaultId String
+  vault   Vault  @relation(fields: [vaultId], references: [id], onDelete: Cascade)
+
+  dataEncrypted String       // 完整条目 JSON 加密，含 url/username/password 等
+  category      ItemCategory
+  favorite      Boolean      @default(false)
+
+  currentVersionId String?
+  versions        ItemVersion[] @relation("ItemVersions")
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?  // 软删除
+
+  createdById String?
+  createdBy   Account? @relation("ItemsCreatedBy", fields: [createdById], references: [id])
+  updatedById String?
+  updatedBy   Account? @relation("ItemsUpdatedBy", fields: [updatedById], references: [id])
+  accountId   String?
+  account     Account? @relation(fields: [accountId], references: [id])
+
+  @@index([vaultId, deletedAt])
+  @@index([vaultId, favorite, updatedAt])
+  @@index([category, vaultId])
+  @@map("vault_items")
+}
+
+// --- 条目版本历史 ---
+model ItemVersion {
+  id     String  @id @default(uuid())
+  itemId String
+  item   Item    @relation("ItemVersions", fields: [itemId], references: [id], onDelete: Cascade)
+
+  dataEncrypted String
+  versionNumber Int      // 同条目内自增 1,2,3...
+  changedBy     String   // 修改者 account id
+  changeReason  String?  // 可选，如「密码更新」
+  createdAt     DateTime @default(now())
+
+  @@unique([itemId, versionNumber])
+  @@index([itemId, versionNumber])
+  @@map("vault_item_versions")
+}
+
+// --- 保险库共享（零知识：vaultKey 用被共享者公钥加密） ---
+model Share {
+  id String @id @default(uuid())
+
+  sharedByAccountId   String
+  sharedBy            Account @relation("SharedBy", fields: [sharedByAccountId], references: [id])
+  sharedWithAccountId String
+  sharedWith          Account @relation("SharedWith", fields: [sharedWithAccountId], references: [id])
+
+  permission VaultPermission @default(VIEW)
+  status     ShareStatus     @default(PENDING)
+  expiresAt  DateTime?
+
+  vaultKeyEncrypted String  // 用 sharedWith 公钥加密的 vaultKey
+  publicKeyUsed     String  // 所用公钥指纹，审计用
+
+  acceptedAt DateTime?
+  revokedAt  DateTime?
+  revokedBy  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  vaultId   String
+  vault     Vault    @relation(fields: [vaultId], references: [id], onDelete: Cascade)
+
+  @@unique([vaultId, sharedWithAccountId, status])
+  @@index([sharedWithAccountId, status])
+  @@index([vaultId, status])
+  @@map("vault_shares")
+}
+
+// --- 回收站（软删除持久化，可恢复） ---
+model Trash {
+  id        String  @id @default(uuid())
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  itemType TrashItemType
+  itemId   String   // 原 Vault.id 或 Item.id
+  vaultId  String?  // 所属保险库，恢复时定位用
+
+  nameEncrypted String?  // 保险库名或项标题，加密
+  dataEncrypted String?  // 完整加密数据，恢复用
+
+  deletedBy String    // 执行删除的 account id
+  deletedAt DateTime @default(now())
+  purgedAt  DateTime?  // 彻底清除时间，用于自动清理
+
+  isRestored        Boolean   @default(false)
+  restoredAt        DateTime?
+  restoredToVaultId String?
+  vault             Vault?    @relation(fields: [vaultId], references: [id])
+
+  @@index([accountId, purgedAt])
+  @@index([deletedAt])
+  @@map("trash")
+}
+
+// --- 公钥注册（共享时用被共享者公钥加密 vaultKey） ---
+model PublicKey {
+  id        String  @id @default(uuid())
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  publicKeyPem String   // PEM
+  fingerprint  String   @unique  // SHA256，匹配与审计
+  deviceId     String?  @unique
+  device       Device?  @relation(fields: [deviceId], references: [id])
+
+  isActive     Boolean   @default(true)
+  registeredAt DateTime  @default(now())
+  revokedAt    DateTime?
+
+  @@index([accountId, isActive])
+  @@map("public_keys")
 }

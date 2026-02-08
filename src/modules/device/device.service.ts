@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '@/shared/prisma/prisma.service';
+import { PrismaService } from '@/infrastructure/database/prisma.service';
 import type { CreateDeviceDto } from './dto/create-device.dto';
 import type { UpdateDeviceDto } from './dto/update-device.dto';
 
@@ -7,31 +7,9 @@ import type { UpdateDeviceDto } from './dto/update-device.dto';
 export class DeviceService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateDeviceDto) {
-    return await this.prisma.device.create({
-      data: {
-        userId: dto.userId,
-        deviceName: dto.deviceName ?? undefined,
-        userAgent: dto.userAgent ?? undefined,
-        ipHash: dto.ipHash ?? undefined,
-        expiresAt: new Date(dto.expiresAt),
-      },
-    });
-  }
+  async create(dto: CreateDeviceDto) {}
 
-  async findMany(skip?: number, take?: number, userId?: number) {
-    const where = userId != null ? { userId } : {};
-    const [list, total] = await Promise.all([
-      this.prisma.device.findMany({
-        where,
-        skip,
-        take,
-        orderBy: { lastActiveAt: 'desc' },
-      }),
-      this.prisma.device.count({ where }),
-    ]);
-    return { list, total };
-  }
+  async findMany(skip?: number, take?: number, userId?: number) {}
 
   async findOne(id: string) {
     const device = await this.prisma.device.findUnique({ where: { id } });
@@ -39,22 +17,7 @@ export class DeviceService {
     return device;
   }
 
-  async update(id: string, dto: UpdateDeviceDto) {
-    await this.findOne(id);
-    return this.prisma.device.update({
-      where: { id },
-      data: {
-        ...(dto.deviceName !== undefined && { deviceName: dto.deviceName }),
-        ...(dto.userAgent !== undefined && { userAgent: dto.userAgent }),
-        ...(dto.ipHash !== undefined && { ipHash: dto.ipHash }),
-        ...(dto.isRevoked != null && { isRevoked: dto.isRevoked }),
-        ...(dto.expiresAt != null && { expiresAt: new Date(dto.expiresAt) }),
-      },
-    });
-  }
+  async update(id: string, dto: UpdateDeviceDto) {}
 
-  async remove(id: string) {
-    await this.findOne(id);
-    return this.prisma.device.delete({ where: { id } });
-  }
+  async remove(id: string) {}
 }

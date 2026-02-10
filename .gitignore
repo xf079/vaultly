@@ -46,6 +46,10 @@ lerna-debug.log*
 .temp
 .tmp
 
+# SQLite (local dev)
+*.db
+prisma/*.db
+
 # Runtime data
 pids
 *.pid

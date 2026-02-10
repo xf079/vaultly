@@ -65,7 +65,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     if (typeof res === 'string') return res;
     if (typeof res === 'object' && res !== null && 'message' in res) {
       const msg = (res as { message?: string | string[] }).message;
-      return Array.isArray(msg) ? msg[0] ?? '' : msg ?? '';
+      return Array.isArray(msg) ? (msg[0] ?? '') : (msg ?? '');
     }
     return '';
   }

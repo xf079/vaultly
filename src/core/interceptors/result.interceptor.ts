@@ -22,7 +22,7 @@ export class ResultInterceptor implements NestInterceptor {
     return next.handle().pipe(
       map((value: unknown) => {
         if (this.isApiResult(value)) {
-          return this.ensureTimestamp(value as ApiResult<unknown>);
+          return this.ensureTimestamp(value);
         }
         return this.wrapSuccess(value);
       }),

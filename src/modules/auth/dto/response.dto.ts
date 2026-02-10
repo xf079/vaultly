@@ -1,5 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 
+// ─── 注册流程响应 DTOs ───────────────────────────────────
+
 export class EmailAvailableResponseDto {
   @ApiProperty({
     example: true,
@@ -8,59 +10,87 @@ export class EmailAvailableResponseDto {
   available!: boolean;
 }
 
-/**
- * 发送注册验证码响应DTO
- * @example
- * {
- *   "expires_in": 600,
- *   "masked_email": "u***@example.com"
- * }
- */
 export class SendRegisterCodeResponseDto {
   @ApiProperty({
     example: 600,
-    description: '验证码有效期',
+    description: '验证码有效期（秒）',
   })
   expiresIn!: number;
 
   @ApiProperty({
-    example: 'user@example.com',
-    description: '邮箱（掩码）',
+    example: 'u***@example.com',
+    description: '掩码后的邮箱',
   })
   maskedEmail!: string;
 }
 
-/**
- * 验证注册验证码响应DTO
- * @example
- * {
- *   "verification_token": "vrt_7a3b9c1d2e5f8a0b",
- *   "expires_in": 600
- * }
- */
 export class VerifyRegisterCodeResponseDto {
   @ApiProperty({
     example: 'vrt_7a3b9c1d2e5f8a0b',
-    description: '验证码Token',
+    description: '邮箱验证令牌（用于后续注册步骤）',
   })
   verificationToken!: string;
 
   @ApiProperty({
     example: 600,
-    description: '验证码有效期',
+    description: '令牌有效期（秒）',
   })
   expiresIn!: number;
 }
 
-export class LoginResponseDto {
+export class RegisterResponseDto {
   @ApiProperty({
-    example: 'token',
-    description: 'Token',
+    example: 'acc_5f8e7d6c4b3a',
+    description: '账户 UUID',
   })
-  token!: string;
+  accountUuid!: string;
+
+  @ApiProperty({
+    example: 'https://cdn.yourvault.com/kits/kit_acc_xxx.pdf?token=xyz',
+    description: 'Emergency Kit 下载链接（预签名，单次有效）',
+  })
+  emergencyKitUrl!: string;
+
+  @ApiProperty({
+    example: 3600,
+    description: 'Emergency Kit 下载链接有效期（秒）',
+  })
+  emergencyKitExpiresIn!: number;
+
+  @ApiProperty({
+    example: 'download_emergency_kit',
+    description: '下一步操作指引',
+  })
+  nextStep!: string;
 }
 
-export class RegisterResponseDto {
+// ─── 登录流程响应 DTOs ───────────────────────────────────
+
+export class LoginChallengeResponseDto {
+  @ApiProperty({
+    example: 'U2FsdGVkX1+abc123...',
+    description: 'SRP 盐（Base64 编码）',
+  })
+  srpSalt!: string;
+
+  @ApiProperty({
+    example: 'jkl012...',
+    description: '服务端 SRP 公钥 B（Base64 编码）',
+  })
+  srpB!: string;
+
+  @ApiProperty({
+    example: 'sha256:ghi789...',
+    description: 'Secret Key 指纹（用于客户端提示）',
+  })
+  secretKeyFingerprint!: string;
+
+  @ApiProperty({
+    example: 100000,
+    description: 'KDF 迭代次数',
+  })
+  kdfIterations!: number;
+
   @ApiProperty({
     example: 'acc_5f8e7d6c4b3a',
     description: 'Account UUID',
@@ -68,21 +98,66 @@ export class RegisterResponseDto {
   accountUuid!: string;
 
   @ApiProperty({
-    example:
-      'https://cdn.yourvault.com/kits/kit_acc_5f8e7d6c4b3a.pdf?token=xyz&expires=1707235200',
-    description: 'Emergency Kit URL',
+    example: true,
+    description: '是否为新设备（新设备需输入 Secret Key）',
   })
-  emergencyKitUrl!: string;
+  requiresSecretKey!: boolean;
+}
+
+export class LoginVerifyResponseDto {
+  @ApiProperty({
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+    description: '会话令牌（JWT）',
+  })
+  sessionToken!: string;
 
   @ApiProperty({
-    example: 3600,
-    description: 'Emergency Kit Expires In',
+    example: 86400,
+    description: '令牌有效期（秒）',
   })
-  emergencyKitExpiresIn!: number;
+  expiresIn!: number;
 
   @ApiProperty({
-    example: 'download_emergency_kit',
-    description: 'Next Step',
+    example: true,
+    description: '是否为新设备',
+  })
+  isNewDevice!: boolean;
+
+  @ApiProperty({
+    example: 'register_device',
+    description: '下一步操作指引（register_device 或 sync_vaults）',
   })
   nextStep!: string;
+}
+
+// ─── 设备信任响应 DTO ────────────────────────────────────
+
+export class TrustDeviceResponseDto {
+  @ApiProperty({
+    example: 'dev_9f8e7d6c4b3a',
+    description: '设备 ID',
+  })
+  deviceId!: string;
+
+  @ApiProperty({
+    example: '2027-02-06T18:19:30Z',
+    description: '信任有效期至',
+  })
+  trustedUntil!: string;
+}
+
+// ─── 会话管理响应 DTOs ───────────────────────────────────
+
+export class SessionRefreshResponseDto {
+  @ApiProperty({
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+    description: '新的会话令牌',
+  })
+  sessionToken!: string;
+
+  @ApiProperty({
+    example: 86400,
+    description: '新令牌有效期（秒）',
+  })
+  expiresIn!: number;
 }

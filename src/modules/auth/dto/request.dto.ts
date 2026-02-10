@@ -1,14 +1,23 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty } from 'class-validator';
+import {
+  IsEmail,
+  IsInt,
+  IsNotEmpty,
+  IsString,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+import { ClientMetadataDto } from './client-metadata.dto';
+
+// ─── 注册流程 DTOs ───────────────────────────────────────
 
 /**
- * 发送注册验证码请求DTO
- * @example
- * {
- *   "email": "user@example.com"
- *   "client_fingerprint": "sha256:...",
- *   "captcha_token": "03AGdBq24P..."
- * }
+ * 发送注册验证码请求 DTO
  */
 export class SendRegisterCodeDto {
   @IsNotEmpty()
@@ -20,27 +29,24 @@ export class SendRegisterCodeDto {
   email!: string;
 
   @IsNotEmpty()
+  @IsString()
   @ApiProperty({
-    example: 'sha256:...',
+    example: 'sha256:abc123...',
     description: '客户端指纹',
   })
-  client_fingerprint!: string;
+  clientFingerprint!: string;
 
   @IsNotEmpty()
+  @IsString()
   @ApiProperty({
     example: '03AGdBq24P...',
-    description: '验证码Token',
+    description: 'Captcha Token',
   })
-  captcha_token!: string;
+  captchaToken!: string;
 }
 
 /**
- * 验证注册验证码请求DTO
- * @example
- * {
- *   "email": "user@example.com",
- *   "code": "123456"
- * }
+ * 验证注册验证码请求 DTO
  */
 export class VerifyRegisterCodeDto {
   @IsNotEmpty()
@@ -52,19 +58,85 @@ export class VerifyRegisterCodeDto {
   email!: string;
 
   @IsNotEmpty()
+  @IsString()
   @ApiProperty({
     example: '123456',
-    description: '验证码',
+    description: '6位数字验证码',
   })
   code!: string;
 }
 
 /**
- * 获取登录挑战请求DTO
- * @example
- * {
- *   "email": "user@example.com"
- * }
+ * 提交注册请求 DTO（零知识核心 - 接口4）
+ * 客户端提交 SRP 参数，服务端仅存 verifier 和 salt，永不接触明文密码
+ */
+export class RegisterDto {
+  @IsNotEmpty()
+  @IsEmail()
+  @ApiProperty({
+    example: 'user@example.com',
+    description: '邮箱',
+  })
+  email!: string;
+
+  @IsNotEmpty()
+  @IsString()
+  @ApiProperty({
+    example: 'vrt_7a3b9c1d2e5f8a0b',
+    description: '邮箱验证令牌（来自验证码验证步骤）',
+  })
+  verificationToken!: string;
+
+  @IsNotEmpty()
+  @IsString()
+  @MinLength(44)
+  @MaxLength(44)
+  @ApiProperty({
+    example: 'U2FsdGVkX1+abc123...',
+    description: 'SRP 盐（Base64 编码，32字节）',
+  })
+  srpSalt!: string;
+
+  @IsNotEmpty()
+  @IsString()
+  @MinLength(512)
+  @ApiProperty({
+    example: 'def456...',
+    description: 'SRP 验证子（Base64 编码，g^x mod N）',
+  })
+  srpVerifier!: string;
+
+  @IsNotEmpty()
+  @IsString()
+  @Matches(/^[a-f0-9]{64}$/i)
+  @ApiProperty({
+    example: 'sha256:ghi789...',
+    description: 'Secret Key 的 SHA256 指纹（64字符十六进制）',
+  })
+  secretKeyFingerprint!: string;
+
+  @IsInt()
+  @Min(10000)
+  @Max(500000)
+  @ApiProperty({
+    example: 100000,
+    description: 'PBKDF2 KDF 迭代次数',
+  })
+  kdfIterations!: number;
+
+  @ValidateNested()
+  @Type(() => ClientMetadataDto)
+  @ApiProperty({
+    type: ClientMetadataDto,
+    description: '客户端设备元数据',
+  })
+  clientMetadata!: ClientMetadataDto;
+}
+
+// ─── 登录流程 DTOs ───────────────────────────────────────
+
+/**
+ * 获取登录挑战请求 DTO（SRP 起点 - 接口5）
  */
 export class LoginChallengeDto {
   @IsNotEmpty()
@@ -77,18 +149,11 @@ export class LoginChallengeDto {
 }
 
 /**
- * 验证登录请求DTO
- * @example
- * {
- *   "account_uuid": "acc_5f8e7d6c4b3a",
- *   "srp_a": "base64:mno345...",
- *   "srp_m1": "base64:pqr678...",
- *   "secret_key_fingerprint": "sha256:ghi789...",
- *   "device_fingerprint": "sha256:stu901..."
- * }
+ * 验证登录请求 DTO（SRP + Secret Key 双因子 - 接口6）
  */
 export class LoginVerifyDto {
   @IsNotEmpty()
+  @IsString()
   @ApiProperty({
     example: 'acc_5f8e7d6c4b3a',
     description: 'Account UUID',
@@ -96,82 +161,81 @@ export class LoginVerifyDto {
   accountUuid!: string;
 
   @IsNotEmpty()
+  @IsString()
+  @MinLength(44)
   @ApiProperty({
     example: 'base64:mno345...',
-    description: 'SRP A',
+    description: '客户端 SRP 公钥 A（Base64）',
   })
   srpA!: string;
 
   @IsNotEmpty()
+  @IsString()
+  @MinLength(44)
   @ApiProperty({
     example: 'base64:pqr678...',
-    description: 'SRP M1',
+    description: '客户端 SRP 证据 M1（Base64）',
   })
   srpM1!: string;
 
   @IsNotEmpty()
+  @IsString()
+  @Matches(/^[a-f0-9]{64}$/i)
   @ApiProperty({
     example: 'sha256:ghi789...',
-    description: 'Secret Key Fingerprint',
-  })
-  secretKeyFingerprint!: string;
-
-  @IsNotEmpty()
-  @ApiProperty({
-    example: 'sha256:stu901...',
-    description: 'Device Fingerprint',
-  })
-  deviceFingerprint!: string;
-
-  @IsNotEmpty()
-  @ApiProperty({
-    example: 100000,
-    description: 'KDF Iterations',
-  })
-  kdfIterations!: number;
-}
-
-export class RegisterDto {
-  @IsNotEmpty()
-  @IsEmail()
-  @ApiProperty({
-    example: 'user@example.com',
-    description: '邮箱',
-  })
-  email!: string;
-
-  @IsNotEmpty()
-  @ApiProperty({
-    example: 'password',
-    description: '密码',
-  })
-  password!: string;
-
-  @IsNotEmpty()
-  @ApiProperty({
-    example: 'base64:...',
-    description: 'SRP 盐',
-  })
-  srpSalt!: string;
-
-  @IsNotEmpty()
-  @ApiProperty({
-    example: 'g^x mod N',
-    description: 'SRP 验证子',
-  })
-  srpVerifier!: string;
-
-  @IsNotEmpty()
-  @ApiProperty({
-    example: 'sha256:...',
     description: 'Secret Key 指纹',
   })
   secretKeyFingerprint!: string;
 
   @IsNotEmpty()
+  @IsString()
+  @MinLength(64)
+  @MaxLength(64)
   @ApiProperty({
-    example: 100000,
-    description: 'PBKDF2 迭代次数',
+    example: 'sha256:stu901...',
+    description: '设备指纹',
   })
-  kdfIterations!: number;
+  deviceFingerprint!: string;
+
+  @ValidateNested()
+  @Type(() => ClientMetadataDto)
+  @ApiProperty({
+    type: ClientMetadataDto,
+    description: '客户端设备元数据',
+  })
+  clientMetadata!: ClientMetadataDto;
+}
+
+// ─── 设备信任 DTO ────────────────────────────────────────
+
+/**
+ * 注册可信设备请求 DTO（接口7）
+ */
+export class TrustDeviceDto {
+  @IsNotEmpty()
+  @IsString()
+  @MaxLength(100)
+  @ApiProperty({
+    example: 'iPhone 15 Pro',
+    description: '设备名称',
+  })
+  deviceName!: string;
+
+  @IsNotEmpty()
+  @IsString()
+  @MinLength(64)
+  @MaxLength(64)
+  @ApiProperty({
+    example: 'sha256:stu901...',
+    description: '设备指纹',
+  })
+  deviceFingerprint!: string;
+
+  @ValidateNested()
+  @Type(() => ClientMetadataDto)
+  @ApiProperty({
+    type: ClientMetadataDto,
+    description: '客户端设备元数据',
+  })
+  clientMetadata!: ClientMetadataDto;
 }

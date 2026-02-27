@@ -1,3 +1,13 @@
+/**
+ * @file device-fingerprint.decorator.ts
+ * @description 设备指纹装饰器，用于从请求头中提取设备指纹
+ * @module shared/decorators/device-fingerprint.decorator
+ *
+ * @author xfo79k@gmail.com
+ * @copyright Copyright (c) 2026 xfo79k@gmail.com. All rights reserved.
+ * @license UNLICENSED
+ * @since 2026-02
+ */
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 
 /**

@@ -1,6 +1,16 @@
 /**
- * 企业级统一业务/HTTP 结果码
- * 0 为成功，非 0 为各类错误
+ * @file result-code.ts
+ * @description 结果码常量
+ * @module core/constants/result-code
+ *
+ * @author xfo79k@gmail.com
+ * @copyright Copyright (c) 2026 xfo79k@gmail.com. All rights reserved.
+ * @license UNLICENSED
+ * @since 2026-02
+ */
+
+/**
+ * 结果码枚举
  */
 export enum ResultCode {
   /** 成功 */

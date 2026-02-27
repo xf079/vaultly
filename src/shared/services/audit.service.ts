@@ -1,3 +1,14 @@
+/**
+ * @file audit.service.ts
+ * @description 审计日志服务（SOC 2 合规），统一写入审计日志，供各模块注入使用
+ * @module shared/services/audit.service
+ *
+ * @author xfo79k@gmail.com
+ * @copyright Copyright (c) 2026 xfo79k@gmail.com. All rights reserved.
+ * @license UNLICENSED
+ * @since 2026-02
+ */
+
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@/infrastructure/database/prisma.service';
 import { AuditEventType } from '@/generated/prisma/enums';
@@ -38,6 +49,8 @@ export class AuditService {
   /**
    * 写入审计日志
    * 采用 fire-and-forget 友好模式：捕获所有异常，不影响调用方
+   * @param input 审计日志输入
+   * @returns 审计日志输出
    */
   async log(input: AuditLogInput): Promise<void> {
     try {
@@ -57,7 +70,10 @@ export class AuditService {
   }
 
   /**
-   * 查询账户审计日志（分页）
+   * 查询账户审计日志
+   * @param accountId 账户 ID
+   * @param options 查询选项
+   * @returns 审计日志
    */
   async findByAccount(
     accountId: string,
@@ -72,7 +88,10 @@ export class AuditService {
   }
 
   /**
-   * 按事件类型查询（安全团队审查用）
+   * 按事件类型查询
+   * @param eventType 事件类型
+   * @param options 查询选项
+   * @returns 审计日志
    */
   async findByEventType(
     eventType: AuditEventType,

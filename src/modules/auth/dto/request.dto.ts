@@ -14,8 +14,6 @@ import {
 import { Type } from 'class-transformer';
 import { ClientMetadataDto } from './client-metadata.dto';
 
-// ─── 注册流程 DTOs ───────────────────────────────────────
-
 /**
  * 发送注册验证码请求 DTO
  */
@@ -67,8 +65,7 @@ export class VerifyRegisterCodeDto {
 }
 
 /**
- * 提交注册请求 DTO（零知识核心 - 接口4）
- * 客户端提交 SRP 参数，服务端仅存 verifier 和 salt，永不接触明文密码
+ * 提交注册请求 DTO
  */
 export class RegisterDto {
   @IsNotEmpty()
@@ -133,10 +130,8 @@ export class RegisterDto {
   clientMetadata!: ClientMetadataDto;
 }
 
-// ─── 登录流程 DTOs ───────────────────────────────────────
-
 /**
- * 获取登录挑战请求 DTO（SRP 起点 - 接口5）
+ * 获取登录挑战请求 DTO
  */
 export class LoginChallengeDto {
   @IsNotEmpty()
@@ -149,7 +144,7 @@ export class LoginChallengeDto {
 }
 
 /**
- * 验证登录请求 DTO（SRP + Secret Key 双因子 - 接口6）
+ * 验证登录请求 DTO
  */
 export class LoginVerifyDto {
   @IsNotEmpty()
@@ -206,10 +201,8 @@ export class LoginVerifyDto {
   clientMetadata!: ClientMetadataDto;
 }
 
-// ─── 设备信任 DTO ────────────────────────────────────────
-
 /**
- * 注册可信设备请求 DTO（接口7）
+ * 注册可信设备请求 DTO
  */
 export class TrustDeviceDto {
   @IsNotEmpty()

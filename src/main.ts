@@ -1,13 +1,31 @@
-import { Logger } from '@nestjs/common';
+/**
+ * @file main.ts
+ * @description 应用入口文件，负责启动应用
+ * @module main
+ *
+ * @author xfo79k@gmail.com
+ * @copyright Copyright (c) 2026 xfo79k@gmail.com. All rights reserved.
+ * @license UNLICENSED
+ * @since 2026-02
+ */
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
-import { SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from '@/app.module';
-import { buildSwaggerDocument } from '@/configs';
+import { setupSwagger } from '@/swagger-setup';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
+
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+      transformOptions: { enableImplicitConversion: true },
+    }),
+  );
 
   app.setGlobalPrefix(config.get<string>('API_PREFIX', 'api'));
 
@@ -16,26 +34,12 @@ async function bootstrap() {
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   });
 
-  const swaggerPath = config.get<string>('SWAGGER_PATH', 'api-docs');
-  const document = SwaggerModule.createDocument(
-    app,
-    buildSwaggerDocument({
-      title: config.get('SWAGGER_TITLE'),
-      description: config.get('SWAGGER_DESCRIPTION'),
-      version: config.get('SWAGGER_VERSION'),
-    }),
-  );
-  SwaggerModule.setup(swaggerPath, app, document, {
-    swaggerOptions: {
-      persistAuthorization: config.get('SWAGGER_PERSIST_AUTHORIZATION', true),
-    },
-  });
+  setupSwagger(app);
 
   const port = config.get<number>('PORT', 3000);
   await app.listen(port);
 
   const baseUrl = `http://localhost:${port}`;
   Logger.log(`Application is running on: ${baseUrl}`, 'Bootstrap');
-  Logger.log(`Swagger 文档: ${baseUrl}/${swaggerPath}`, 'Bootstrap');
 }
 void bootstrap();

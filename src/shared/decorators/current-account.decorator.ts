@@ -1,3 +1,13 @@
+/**
+ * @file current-account.decorator.ts
+ * @description 当前认证账户装饰器，用于从请求上下文中提取当前认证账户信息
+ * @module shared/decorators/current-account.decorator
+ *
+ * @author xfo79k@gmail.com
+ * @copyright Copyright (c) 2026 xfo79k@gmail.com. All rights reserved.
+ * @license UNLICENSED
+ * @since 2026-02
+ */
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 import type { JwtPayload } from '@/shared/interfaces/jwt-payload.interface';
 

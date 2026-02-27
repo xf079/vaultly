@@ -38,34 +38,6 @@ export class VerifyRegisterCodeResponseDto {
   expiresIn!: number;
 }
 
-export class RegisterResponseDto {
-  @ApiProperty({
-    example: 'acc_5f8e7d6c4b3a',
-    description: '账户 UUID',
-  })
-  accountUuid!: string;
-
-  @ApiProperty({
-    example: 'https://cdn.yourvault.com/kits/kit_acc_xxx.pdf?token=xyz',
-    description: 'Emergency Kit 下载链接（预签名，单次有效）',
-  })
-  emergencyKitUrl!: string;
-
-  @ApiProperty({
-    example: 3600,
-    description: 'Emergency Kit 下载链接有效期（秒）',
-  })
-  emergencyKitExpiresIn!: number;
-
-  @ApiProperty({
-    example: 'download_emergency_kit',
-    description: '下一步操作指引',
-  })
-  nextStep!: string;
-}
-
-// ─── 登录流程响应 DTOs ───────────────────────────────────
-
 export class LoginChallengeResponseDto {
   @ApiProperty({
     example: 'U2FsdGVkX1+abc123...',

@@ -1,7 +1,20 @@
+/**
+ * @file api-error-responses.decorator.ts
+ * @description 为接口声明 Result API 风格的 4xx/5xx 错误响应（Swagger 文档用）
+ * @module core/decorators/api-error-responses.decorator
+ *
+ * @author xfo79k@gmail.com
+ * @copyright Copyright (c) 2026 xfo79k@gmail.com. All rights reserved.
+ * @license UNLICENSED
+ * @since 2026-02
+ */
 import { applyDecorators } from '@nestjs/common';
 import { ApiResponse } from '@nestjs/swagger';
 
-/** 为接口声明 Result API 风格的 4xx/5xx 错误响应（Swagger 文档用） */
+/**
+ * 为接口声明 Result API 风格的 4xx/5xx 错误响应（Swagger 文档用）
+ * @returns 装饰器
+ */
 export function ApiErrorResponses() {
   return applyDecorators(
     ApiResponse({

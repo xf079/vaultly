@@ -1,5 +1,15 @@
 /**
- * Result API 风格：统一响应体
+ * @file result.interface.ts
+ * @description Result API 风格：统一响应体
+ * @module core/interfaces/result.interface
+ *
+ * @author xfo79k@gmail.com
+ * @copyright Copyright (c) 2026 xfo79k@gmail.com. All rights reserved.
+ * @license UNLICENSED
+ * @since 2026-02
+ */
+
+/** Result API 风格：统一响应体
  * - 成功: { code: 0, message, data }
  * - 失败: { code: number, message, data: null }
  */

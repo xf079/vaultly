@@ -1,3 +1,13 @@
+/**
+ * @file http-exception.filter.ts
+ * @description HTTP 异常过滤器，将异常转换为 Result API 格式
+ * @module core/filters/http-exception.filter
+ *
+ * @author xfo79k@gmail.com
+ * @copyright Copyright (c) 2026 xfo79k@gmail.com. All rights reserved.
+ * @license UNLICENSED
+ * @since 2026-02
+ */
 import {
   type ArgumentsHost,
   Catch,
@@ -25,6 +35,11 @@ const HTTP_TO_RESULT_CODE: Record<number, ResultCode> = {
 export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
 
+  /**
+   * 捕获异常并转换为 ApiResult 格式
+   * @param exception 异常
+   * @param host 参数主机
+   */
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
@@ -37,6 +52,11 @@ export class HttpExceptionFilter implements ExceptionFilter {
     response.status(status).json(result);
   }
 
+  /**
+   * 将异常转换为 ApiResult 格式
+   * @param exception 异常
+   * @returns ApiResult 格式
+   */
   private toApiResult(exception: unknown): ApiResult<null> {
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
@@ -60,6 +80,11 @@ export class HttpExceptionFilter implements ExceptionFilter {
     };
   }
 
+  /**
+   * 获取异常消息
+   * @param exception 异常
+   * @returns 异常消息
+   */
   private getExceptionMessage(exception: HttpException): string {
     const res = exception.getResponse();
     if (typeof res === 'string') return res;
@@ -70,6 +95,11 @@ export class HttpExceptionFilter implements ExceptionFilter {
     return '';
   }
 
+  /**
+   * 获取 HTTP 状态码
+   * @param exception 异常
+   * @returns HTTP 状态码
+   */
   private getHttpStatus(exception: unknown): number {
     if (exception instanceof HttpException) {
       return exception.getStatus();

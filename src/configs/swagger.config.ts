@@ -30,6 +30,5 @@ export function buildSwaggerDocument(
       },
       'bearer',
     )
-    .addTag('auth', '授权')
     .build();
 }

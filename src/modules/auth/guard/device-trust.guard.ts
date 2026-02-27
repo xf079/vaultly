@@ -5,7 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import type { JwtPayload } from '@/shared/interfaces/jwt-payload.interface';
-import { DeviceService } from '../services/device.service';
+import { DeviceService } from '../../device/device.service';
 
 /**
  * 设备信任守卫

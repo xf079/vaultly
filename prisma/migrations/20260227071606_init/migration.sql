@@ -10,8 +10,16 @@ CREATE TABLE "accounts" (
     "lockedUntil" DATETIME,
     "failedLoginAttempts" INTEGER NOT NULL DEFAULT 0,
     "emailVerifiedAt" DATETIME,
-    "lastPasswordChangeAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "emergencyKitDownloaded" BOOLEAN NOT NULL DEFAULT false
+    "lastPasswordChangeAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
+CREATE TABLE "profiles" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "accountId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "avatarUrl" TEXT,
+    CONSTRAINT "profiles_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "accounts" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
@@ -45,31 +53,14 @@ CREATE TABLE "audit_logs" (
 );
 
 -- CreateTable
-CREATE TABLE "session_revocations" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "accountId" TEXT NOT NULL,
-    "tokenJti" TEXT NOT NULL,
-    "revokedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "expiresAt" DATETIME NOT NULL,
-    CONSTRAINT "session_revocations_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "accounts" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-
--- CreateTable
-CREATE TABLE "rate_limit_counters" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "key" TEXT NOT NULL,
-    "attempts" INTEGER NOT NULL DEFAULT 1,
-    "resetAt" DATETIME NOT NULL
-);
-
--- CreateTable
 CREATE TABLE "vaults" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "accountId" TEXT NOT NULL,
-    "nameEncrypted" TEXT NOT NULL,
-    "descriptionEncrypted" TEXT,
+    "name" TEXT NOT NULL,
+    "icon" TEXT,
+    "description" TEXT,
     "type" TEXT NOT NULL DEFAULT 'PERSONAL',
-    "vaultKeyEncrypted" TEXT NOT NULL,
+    "vaultKey" TEXT NOT NULL,
     "isFavorite" BOOLEAN NOT NULL DEFAULT false,
     "isArchived" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -83,6 +74,7 @@ CREATE TABLE "vault_items" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "vaultId" TEXT NOT NULL,
     "dataEncrypted" TEXT NOT NULL,
+    "metadata" JSONB,
     "category" TEXT NOT NULL,
     "favorite" BOOLEAN NOT NULL DEFAULT false,
     "currentVersionId" TEXT,
@@ -121,8 +113,6 @@ CREATE TABLE "vault_shares" (
     "vaultKeyEncrypted" TEXT NOT NULL,
     "publicKeyUsed" TEXT NOT NULL,
     "acceptedAt" DATETIME,
-    "revokedAt" DATETIME,
-    "revokedBy" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
     "vaultId" TEXT NOT NULL,
@@ -174,6 +164,9 @@ CREATE INDEX "accounts_email_idx" ON "accounts"("email");
 CREATE INDEX "accounts_status_lockedUntil_idx" ON "accounts"("status", "lockedUntil");
 
 -- CreateIndex
+CREATE INDEX "profiles_accountId_idx" ON "profiles"("accountId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "devices_fingerprint_key" ON "devices"("fingerprint");
 
 -- CreateIndex
@@ -193,21 +186,6 @@ CREATE INDEX "audit_logs_eventType_createdAt_idx" ON "audit_logs"("eventType", "
 
 -- CreateIndex
 CREATE INDEX "audit_logs_ipAddress_idx" ON "audit_logs"("ipAddress");
-
--- CreateIndex
-CREATE UNIQUE INDEX "session_revocations_tokenJti_key" ON "session_revocations"("tokenJti");
-
--- CreateIndex
-CREATE INDEX "session_revocations_tokenJti_idx" ON "session_revocations"("tokenJti");
-
--- CreateIndex
-CREATE INDEX "session_revocations_expiresAt_idx" ON "session_revocations"("expiresAt");
-
--- CreateIndex
-CREATE UNIQUE INDEX "rate_limit_counters_key_key" ON "rate_limit_counters"("key");
-
--- CreateIndex
-CREATE INDEX "rate_limit_counters_resetAt_idx" ON "rate_limit_counters"("resetAt");
 
 -- CreateIndex
 CREATE INDEX "vaults_accountId_deletedAt_idx" ON "vaults"("accountId", "deletedAt");
@@ -231,7 +209,7 @@ CREATE INDEX "vault_item_versions_itemId_versionNumber_idx" ON "vault_item_versi
 CREATE UNIQUE INDEX "vault_item_versions_itemId_versionNumber_key" ON "vault_item_versions"("itemId", "versionNumber");
 
 -- CreateIndex
-CREATE INDEX "vault_shares_sharedWithAccountId_status_idx" ON "vault_shares"("sharedWithAccountId", "status");
+CREATE INDEX "vault_shares_vaultId_sharedWithAccountId_status_idx" ON "vault_shares"("vaultId", "sharedWithAccountId", "status");
 
 -- CreateIndex
 CREATE INDEX "vault_shares_vaultId_status_idx" ON "vault_shares"("vaultId", "status");

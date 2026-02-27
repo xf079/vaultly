@@ -1,27 +1,35 @@
+/**
+ * @file auth.module.ts
+ * @description 认证模块，负责认证相关的功能
+ * @module auth.module
+ *
+ * @author xfo79k@gmail.com
+ * @copyright Copyright (c) 2026 xfo79k@gmail.com. All rights reserved.
+ * @license UNLICENSED
+ * @since 2026-02
+ */
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 
 // Shared
-import { AuditService } from '@/shared';
+import { SharedModule } from '@/shared/shared.module';
 
-// Controllers
-import { AuthController } from './controllers/auth.controller';
-import { AccountController } from './controllers/account.controller';
-
-// Services
+// Local
+import { AuthController } from './auth.controller';
 import { AuthService } from './services/auth.service';
-import { AccountService } from './services/account.service';
 import { SrpService } from './services/srp.service';
-import { DeviceService } from './services/device.service';
+import { JwtStrategy } from './strategys/jwt.strategy';
+import { DeviceTrustGuard } from './guard/device-trust.guard';
 
-// Strategies & Guards
-import { JwtStrategy } from './strategies/jwt.strategy';
-import { DeviceTrustGuard } from './guards/device-trust.guard';
+// External Modules
+import { AccountModule } from '../account/account.module';
+import { DeviceModule } from '../device/device.module';
 
 @Module({
   imports: [
+    SharedModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -35,23 +43,11 @@ import { DeviceTrustGuard } from './guards/device-trust.guard';
         },
       }),
     }),
+    AccountModule,
+    DeviceModule,
   ],
-  controllers: [AuthController, AccountController],
-  providers: [
-    AuthService,
-    AccountService,
-    SrpService,
-    DeviceService,
-    AuditService,
-    JwtStrategy,
-    DeviceTrustGuard,
-  ],
-  exports: [
-    AuthService,
-    AccountService,
-    DeviceService,
-    AuditService,
-    JwtModule,
-  ],
+  controllers: [AuthController],
+  providers: [AuthService, SrpService, JwtStrategy, DeviceTrustGuard],
+  exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

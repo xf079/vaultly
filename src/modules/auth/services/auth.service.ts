@@ -15,7 +15,7 @@ import { KEYV_TOKEN } from '@/infrastructure/redis/redis.module';
 import { PrismaService } from '@/infrastructure/database/prisma.service';
 import { AccountStatus, AuditEventType } from '@/generated/prisma/enums';
 import { SrpService } from './srp.service';
-import { DeviceService } from './device.service';
+import { DeviceService } from '../../device/device.service';
 import { AuditService } from '@/shared/services/audit.service';
 import {
   SendRegisterCodeDto,
@@ -23,18 +23,17 @@ import {
   RegisterDto,
   LoginChallengeDto,
   LoginVerifyDto,
-  TrustDeviceDto,
 } from '../dto/request.dto';
 import {
   SendRegisterCodeResponseDto,
   VerifyRegisterCodeResponseDto,
-  RegisterResponseDto,
   LoginChallengeResponseDto,
   LoginVerifyResponseDto,
-  TrustDeviceResponseDto,
   SessionRefreshResponseDto,
 } from '../dto/response.dto';
 import type { JwtPayload } from '@/shared/interfaces/jwt-payload.interface';
+import { MailerService } from '@nestjs-modules/mailer';
+import { maskEmail } from '@/utils/util';
 
 /** 验证码有效期：10分钟 */
 const CODE_TTL_MS = 10 * 60 * 1000;
@@ -56,10 +55,9 @@ export class AuthService {
     private readonly srpService: SrpService,
     private readonly deviceService: DeviceService,
     private readonly auditService: AuditService,
+    private readonly mailerService: MailerService,
     @Inject(KEYV_TOKEN) private readonly redis: Keyv,
   ) {}
-
-  // ─── 接口1：检查邮箱可用性 ─────────────────────────────
 
   /**
    * 检查邮箱是否可用
@@ -72,13 +70,15 @@ export class AuthService {
     return { available: !account || account.status !== AccountStatus.ACTIVE };
   }
 
-  // ─── 接口2：发送注册验证码 ─────────────────────────────
-
   /**
    * 发送注册验证码
+   * @param data 发送注册验证码请求数据
+   * @param ip 请求 IP
+   * @returns 发送注册验证码响应数据
    */
   async sendRegisterCode(
     data: SendRegisterCodeDto,
+    ip: string,
   ): Promise<SendRegisterCodeResponseDto> {
     const email = data.email.toLowerCase();
 
@@ -94,20 +94,28 @@ export class AuthService {
     const code = crypto.randomInt(100000, 999999).toString();
     await this.redis.set(`auth:register:code:${email}`, code, CODE_TTL_MS);
 
-    // TODO: 集成邮件服务发送验证码
-    // await this.emailService.sendVerificationCode(email, code);
-    console.log(`[DEV] Registration code for ${email}: ${code}`);
+    await this.mailerService.sendMail({
+      to: email,
+      subject: '注册验证码',
+      text: `您的注册验证码是：${code}，10 分钟内有效。如非本人操作请忽略。`,
+    });
+
+    await this.auditService.log({
+      accountId: undefined,
+      eventType: AuditEventType.ACCOUNT_CREATED,
+      ipAddress: ip,
+    });
 
     return {
       expiresIn: CODE_TTL_MS / 1000,
-      maskedEmail: this.maskEmail(email),
+      maskedEmail: maskEmail(email),
     };
   }
 
-  // ─── 接口3：验证注册验证码 ─────────────────────────────
-
   /**
    * 验证注册验证码
+   * @param data 验证注册验证码请求数据
+   * @returns 验证注册验证码响应数据
    */
   async verifyRegisterCode(
     data: VerifyRegisterCodeDto,
@@ -144,13 +152,13 @@ export class AuthService {
     };
   }
 
-  // ─── 接口4：提交注册（零知识核心） ────────────────────
-
   /**
    * 完成注册，创建零知识账户
    * 服务端仅存储 SRP salt、verifier 和 Secret Key 指纹，永不接触明文密码
+   * @param data 注册请求数据
+   * @param ip 请求 IP
    */
-  async register(data: RegisterDto): Promise<RegisterResponseDto> {
+  async register(data: RegisterDto, ip: string) {
     const email = data.email.toLowerCase();
 
     // 1. 验证 verification token
@@ -211,9 +219,6 @@ export class AuthService {
       return newAccount;
     });
 
-    // 4. 生成 Emergency Kit 下载链接
-    const emergencyKitUrl = await this.generateEmergencyKit(account.id);
-
     // 5. 清理 verification token
     await this.redis.delete(`auth:register:vrt:${data.verificationToken}`);
 
@@ -221,26 +226,19 @@ export class AuthService {
     await this.auditService.log({
       accountId: account.id,
       eventType: AuditEventType.ACCOUNT_CREATED,
-      ipAddress: '0.0.0.0',
+      ipAddress: ip,
       metadata: {
         platform: data.clientMetadata.platform,
         appVersion: data.clientMetadata.appVersion,
       },
     });
-
-    return {
-      accountUuid: account.id,
-      emergencyKitUrl,
-      emergencyKitExpiresIn: 3600,
-      nextStep: 'download_emergency_kit',
-    };
   }
-
-  // ─── 接口5：获取登录挑战（SRP起点） ───────────────────
 
   /**
    * 获取登录挑战参数
    * 服务端生成 SRP 公钥 B，缓存私钥 b 用于后续验证
+   * @param data 获取登录挑战请求数据
+   * @returns 获取登录挑战响应数据
    */
   async loginChallenge(
     data: LoginChallengeDto,
@@ -287,15 +285,20 @@ export class AuthService {
     };
   }
 
-  // ─── 接口6：验证登录（SRP + Secret Key 双因子） ───────
-
   /**
    * 验证登录
    * 1. 验证 Secret Key 指纹
    * 2. SRP 协议验证
    * 3. 签发 JWT 会话令牌
+   * 
+   * @param data 验证登录请求数据
+   * @param ip 请求 IP
+   * @returns 验证登录响应数据
    */
-  async loginVerify(data: LoginVerifyDto): Promise<LoginVerifyResponseDto> {
+  async loginVerify(
+    data: LoginVerifyDto,
+    ip: string,
+  ): Promise<LoginVerifyResponseDto> {
     const account = await this.prisma.account.findUnique({
       where: { id: data.accountUuid },
     });
@@ -320,6 +323,7 @@ export class AuthService {
         account.email,
         AuditEventType.SECRET_KEY_VERIFICATION_FAILED,
         data.deviceFingerprint,
+        ip,
       );
       throw new ForbiddenException('Secret Key 验证失败');
     }
@@ -348,6 +352,7 @@ export class AuthService {
         account.email,
         AuditEventType.SRP_VERIFICATION_FAILED,
         data.deviceFingerprint,
+        ip,
       );
       throw new UnauthorizedException('SRP 验证失败');
     }
@@ -402,7 +407,7 @@ export class AuthService {
     await this.auditService.log({
       accountId: account.id,
       eventType: AuditEventType.LOGIN_SUCCESS,
-      ipAddress: '0.0.0.0',
+      ipAddress: ip,
       metadata: {
         deviceFingerprint: data.deviceFingerprint.slice(-6),
         isNewDevice,
@@ -418,57 +423,20 @@ export class AuthService {
     };
   }
 
-  // ─── 接口7：注册可信设备 ──────────────────────────────
-
-  /**
-   * 注册可信设备（登录后调用）
-   */
-  async trustDevice(
-    accountId: string,
-    deviceFingerprint: string,
-    data: TrustDeviceDto,
-  ): Promise<TrustDeviceResponseDto> {
-    const device = await this.deviceService.createDevice({
-      accountId,
-      fingerprint: deviceFingerprint,
-      name: data.deviceName,
-      platform: data.clientMetadata.platform,
-      osVersion: data.clientMetadata.osVersion,
-      appVersion: data.clientMetadata.appVersion,
-    });
-
-    // 设置为当前会话
-    await this.deviceService.resetCurrentSessions(accountId);
-    await this.deviceService.setCurrentSession(device.id);
-
-    // 审计日志
-    await this.auditService.log({
-      accountId,
-      eventType: AuditEventType.DEVICE_TRUSTED,
-      ipAddress: '0.0.0.0',
-      metadata: {
-        deviceId: device.id,
-        deviceFingerprint: deviceFingerprint.slice(-6),
-        platform: data.clientMetadata.platform,
-      },
-    });
-
-    return {
-      deviceId: device.id,
-      trustedUntil: device.trustedUntil.toISOString(),
-    };
-  }
-
-  // ─── 接口8：刷新会话 ─────────────────────────────────
-
   /**
    * 刷新会话令牌
    * 验证旧 token 有效性，签发新 token，将旧 token 加入吊销列表
+   * @param accountId 账户 ID
+   * @param jti 令牌 JTI
+   * @param exp 令牌过期时间
+   * @param ip 请求 IP
+   * @returns 刷新会话令牌响应数据
    */
   async sessionRefresh(
     accountId: string,
     jti: string,
     exp: number,
+    ip: string,
   ): Promise<SessionRefreshResponseDto> {
     // 检查旧 token 是否已被吊销
     const isRevoked = await this.redis.get(`auth:revoked:${jti}`);
@@ -481,12 +449,10 @@ export class AuthService {
     await this.redis.set(`auth:revoked:${jti}`, true, remainingTtl);
 
     // 同时记录到数据库（用于审计追溯）
-    await this.prisma.sessionRevocation.create({
-      data: {
-        accountId,
-        tokenJti: jti,
-        expiresAt: new Date(exp * 1000),
-      },
+    await this.auditService.log({
+      accountId,
+      eventType: AuditEventType.SESSION_REFRESHED,
+      ipAddress: ip,
     });
 
     // 签发新 token
@@ -510,7 +476,7 @@ export class AuthService {
     await this.auditService.log({
       accountId,
       eventType: AuditEventType.SESSION_REFRESHED,
-      ipAddress: '0.0.0.0',
+      ipAddress: ip,
     });
 
     return {
@@ -519,43 +485,45 @@ export class AuthService {
     };
   }
 
-  // ─── 接口9：主动注销 ─────────────────────────────────
-
   /**
    * 主动注销，将当前 token 加入吊销列表
+   * @param accountId 账户 ID
+   * @param jti 令牌 JTI
+   * @param exp 令牌过期时间
+   * @param ip 请求 IP
    */
-  async logout(accountId: string, jti: string, exp: number): Promise<void> {
-    // 将 token 加入吊销列表
+  async logout(
+    accountId: string,
+    jti: string,
+    exp: number,
+    ip: string,
+  ): Promise<void> {
+    // 1. 将 token 加入吊销列表
     const remainingTtl = Math.max(0, exp * 1000 - Date.now());
     await this.redis.set(`auth:revoked:${jti}`, true, remainingTtl);
 
-    // 记录到数据库
-    await this.prisma.sessionRevocation.create({
-      data: {
-        accountId,
-        tokenJti: jti,
-        expiresAt: new Date(exp * 1000),
-      },
-    });
-
-    // 审计日志
+    // 2. 审计日志
     await this.auditService.log({
       accountId,
       eventType: AuditEventType.LOGOUT,
-      ipAddress: '0.0.0.0',
+      ipAddress: ip,
     });
   }
 
-  // ─── 内部辅助方法 ──────────────────────────────────────
-
   /**
    * 处理登录失败：记录失败次数，超限则锁定账户
+   * @param accountId 账户 ID
+   * @param email 邮箱
+   * @param eventType 事件类型
+   * @param deviceFingerprint 设备指纹
+   * @param ip 请求 IP
    */
   private async handleFailedLogin(
     accountId: string,
     email: string,
     eventType: AuditEventType,
     deviceFingerprint: string,
+    ip: string,
   ) {
     const account = await this.prisma.account.update({
       where: { id: accountId },
@@ -577,7 +545,7 @@ export class AuthService {
     await this.auditService.log({
       accountId,
       eventType,
-      ipAddress: '0.0.0.0',
+      ipAddress: ip,
       metadata: {
         email: this.maskEmail(email),
         deviceFingerprint: deviceFingerprint.slice(-6),

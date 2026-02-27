@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Inject } from '@nestjs/common';
+import { MailerService } from '@nestjs-modules/mailer';
 import Keyv from 'keyv';
 import * as crypto from 'crypto';
 import { KEYV_TOKEN } from '@/infrastructure/redis/redis.module';
@@ -20,6 +21,7 @@ export class AccountService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly mailerService: MailerService,
     @Inject(KEYV_TOKEN) private readonly redis: Keyv,
   ) {}
 
@@ -44,8 +46,16 @@ export class AccountService {
       15 * 60 * 1000, // 15分钟
     );
 
-    // TODO: 发送邮件
-    console.log(`[DEV] Password reset code for ${email}: ${code}`);
+    try {
+      await this.mailerService.sendMail({
+        to: email,
+        subject: 'Vaultly 密码重置验证码',
+        text: `您的验证码是：${code}，15 分钟内有效。如非本人操作请忽略。`,
+      });
+    } catch (err) {
+      console.error('[AccountService] Password reset email failed:', err);
+      console.log(`[DEV] Password reset code for ${email}: ${code}`);
+    }
 
     // 审计日志
     await this.auditService.log({
@@ -112,22 +122,6 @@ export class AccountService {
   }
 
   /**
-   * 确认 Emergency Kit 已下载
-   */
-  async confirmEmergencyKitDownload(accountId: string) {
-    await this.prisma.account.update({
-      where: { id: accountId },
-      data: { emergencyKitDownloaded: true },
-    });
-
-    await this.auditService.log({
-      accountId,
-      eventType: AuditEventType.EMERGENCY_KIT_DOWNLOADED,
-      ipAddress: '0.0.0.0',
-    });
-  }
-
-  /**
    * 获取账户基本信息（脱敏）
    */
   async getAccountProfile(accountId: string) {
@@ -138,7 +132,6 @@ export class AccountService {
         email: true,
         status: true,
         emailVerifiedAt: true,
-        emergencyKitDownloaded: true,
         lastPasswordChangeAt: true,
         kdfIterations: true,
         _count: {
@@ -147,12 +140,14 @@ export class AccountService {
             vaults: true,
           },
         },
+        profile: {
+          select: {
+            name: true,
+            avatarUrl: true,
+          },
+        },
       },
     });
-
-    if (!account) {
-      throw new NotFoundException('账户不存在');
-    }
 
     return account;
   }

@@ -1,3 +1,13 @@
+/**
+ * @file prisma.service.ts
+ * @description 数据库服务，负责配置和管理数据库
+ * @module prisma.service
+ *
+ * @author xfo79k@gmail.com
+ * @copyright Copyright (c) 2026 xfo79k@gmail.com. All rights reserved.
+ * @license UNLICENSED
+ * @since 2026-02
+ */
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaClient } from '@/generated/prisma/client';

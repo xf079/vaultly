@@ -1,3 +1,13 @@
+/**
+ * @file api-result.dto.ts
+ * @description Result API 响应体 DTO
+ * @module core/dto/api-result.dto
+ *
+ * @author xfo79k@gmail.com
+ * @copyright Copyright (c) 2026 xfo79k@gmail.com. All rights reserved.
+ * @license UNLICENSED
+ * @since 2026-02
+ */
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 /**

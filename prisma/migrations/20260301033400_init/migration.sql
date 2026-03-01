@@ -2,10 +2,12 @@
 CREATE TABLE "accounts" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "email" TEXT NOT NULL,
+    "passwordEncrypted" TEXT NOT NULL,
     "srpSalt" TEXT NOT NULL,
     "srpVerifier" TEXT NOT NULL,
     "secretKeyFingerprint" TEXT NOT NULL,
     "kdfIterations" INTEGER NOT NULL DEFAULT 100000,
+    "passwordSalt" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'ACTIVE',
     "lockedUntil" DATETIME,
     "failedLoginAttempts" INTEGER NOT NULL DEFAULT 0,
@@ -162,6 +164,9 @@ CREATE INDEX "accounts_email_idx" ON "accounts"("email");
 
 -- CreateIndex
 CREATE INDEX "accounts_status_lockedUntil_idx" ON "accounts"("status", "lockedUntil");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "profiles_accountId_key" ON "profiles"("accountId");
 
 -- CreateIndex
 CREATE INDEX "profiles_accountId_idx" ON "profiles"("accountId");

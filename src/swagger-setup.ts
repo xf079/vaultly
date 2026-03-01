@@ -24,6 +24,11 @@ export function setupSwagger(app: INestApplication) {
       version: config.get('SWAGGER_VERSION'),
     }),
   );
+  const swaggerJsonPath = `/${swaggerPath}-json`;
+  const originalDescription = document.info.description ?? '';
+
+  document.info.description =
+    `${originalDescription}\n\nOpenAPI JSON 地址：\`${swaggerJsonPath}\``.trim();
   SwaggerModule.setup(swaggerPath, app, document, {
     swaggerOptions: {
       persistAuthorization: config.get('SWAGGER_PERSIST_AUTHORIZATION', true),

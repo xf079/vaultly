@@ -219,11 +219,11 @@ export class DeviceService {
   /**
    * 注销可信设备
    * @param accountId 账户ID
-   * @param fingerprint 设备指纹
+   * @param deviceId 设备ID
    */
-  async untrustDevice(accountId: string, fingerprint: string) {
+  async untrustDevice(accountId: string, deviceId: string) {
     await this.prisma.device.deleteMany({
-      where: { accountId, fingerprint },
+      where: { id: deviceId, accountId },
     });
   }
 }

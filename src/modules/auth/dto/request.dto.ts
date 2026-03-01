@@ -3,6 +3,7 @@ import {
   IsEmail,
   IsInt,
   IsNotEmpty,
+  IsOptional,
   IsString,
   Matches,
   Max,
@@ -121,6 +122,24 @@ export class RegisterDto {
   })
   kdfIterations!: number;
 
+  @IsNotEmpty()
+  @IsString()
+  @Matches(/^[a-f0-9]{32,64}$/i)
+  @ApiProperty({
+    example: 'a1b2c3d4e5f6...',
+    description: 'PBKDF2 每用户随机盐（hex，16–32 字节）',
+  })
+  passwordSalt!: string;
+
+  @IsNotEmpty()
+  @IsString()
+  @Matches(/^[a-f0-9]{64}$/i)
+  @ApiProperty({
+    example: 'e7f8...64hex',
+    description: 'PBKDF2 密码哈希（hex，SHA-256 32 字节）',
+  })
+  passwordEncrypted!: string;
+
   @ValidateNested()
   @Type(() => ClientMetadataDto)
   @ApiProperty({
@@ -131,7 +150,60 @@ export class RegisterDto {
 }
 
 /**
- * 获取登录挑战请求 DTO
+ * 邮箱 + 密码登录请求 DTO
+ * 信任设备：邮箱+密码即可；新/未信任设备：还需传 secretKeyFingerprint
+ */
+export class LoginPasswordDto {
+  @IsNotEmpty()
+  @IsEmail()
+  @ApiProperty({
+    example: 'user@example.com',
+    description: '邮箱',
+  })
+  email!: string;
+
+  @IsNotEmpty()
+  @IsString()
+  @MinLength(8)
+  @ApiProperty({
+    example: 'mySecurePassword123',
+    description: '账户密码（明文）',
+    minLength: 8,
+  })
+  password!: string;
+
+  @IsNotEmpty()
+  @IsString()
+  @MinLength(64)
+  @MaxLength(64)
+  @ApiProperty({
+    example: 'a1b2c3...64hex',
+    description: '设备指纹（64 字符 hex）',
+  })
+  deviceFingerprint!: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^[a-f0-9]{64}$/i)
+  @ApiProperty({
+    example: 'sha256:ghi789...',
+    description: 'Secret Key 指纹（新/未信任设备必填）',
+    required: false,
+  })
+  secretKeyFingerprint?: string;
+
+  @ValidateNested()
+  @Type(() => ClientMetadataDto)
+  @ApiProperty({
+    type: ClientMetadataDto,
+    description: '客户端设备元数据',
+  })
+  clientMetadata!: ClientMetadataDto;
+}
+
+/**
+ * 登录挑战请求 DTO
+ * 用于在调用 login/password 前获知是否需要 Secret Key（信任设备可免）
  */
 export class LoginChallengeDto {
   @IsNotEmpty()
@@ -141,17 +213,28 @@ export class LoginChallengeDto {
     description: '邮箱',
   })
   email!: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^[a-f0-9]{64}$/i)
+  @ApiProperty({
+    example: 'a1b2c3...64hex',
+    description:
+      '设备指纹（64 字符 hex）；若提供则返回是否需 Secret Key（信任设备为 false）',
+    required: false,
+  })
+  deviceFingerprint?: string;
 }
 
 /**
- * 验证登录请求 DTO
+ * SRP 登录验证请求 DTO
  */
 export class LoginVerifyDto {
   @IsNotEmpty()
   @IsString()
   @ApiProperty({
     example: 'acc_5f8e7d6c4b3a',
-    description: 'Account UUID',
+    description: 'Account UUID（来自 login/challenge）',
   })
   accountUuid!: string;
 
@@ -169,18 +252,19 @@ export class LoginVerifyDto {
   @MinLength(44)
   @ApiProperty({
     example: 'base64:pqr678...',
-    description: '客户端 SRP 证据 M1（Base64）',
+    description: '客户端 SRP 证据 M1（Base64 或 64 字符 hex）',
   })
   srpM1!: string;
 
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
   @Matches(/^[a-f0-9]{64}$/i)
   @ApiProperty({
     example: 'sha256:ghi789...',
-    description: 'Secret Key 指纹',
+    description: 'Secret Key 指纹（新设备必填；信任设备可省略）',
+    required: false,
   })
-  secretKeyFingerprint!: string;
+  secretKeyFingerprint?: string;
 
   @IsNotEmpty()
   @IsString()

@@ -38,45 +38,58 @@ export class VerifyRegisterCodeResponseDto {
   expiresIn!: number;
 }
 
+// ─── 登录挑战响应 DTO ────────────────────────────────────
+
 export class LoginChallengeResponseDto {
   @ApiProperty({
     example: 'U2FsdGVkX1+abc123...',
-    description: 'SRP 盐（Base64 编码）',
+    description: 'SRP 盐（Base64，32 字节）',
   })
   srpSalt!: string;
 
   @ApiProperty({
     example: 'jkl012...',
-    description: '服务端 SRP 公钥 B（Base64 编码）',
+    description: '服务端 SRP 公钥 B（Base64）',
   })
   srpB!: string;
 
   @ApiProperty({
     example: 'sha256:ghi789...',
-    description: 'Secret Key 指纹（用于客户端提示）',
+    description: 'Secret Key 指纹（用于客户端提示用户）',
   })
   secretKeyFingerprint!: string;
 
   @ApiProperty({
     example: 100000,
-    description: 'KDF 迭代次数',
+    description: 'KDF 迭代次数（PBKDF2）',
   })
   kdfIterations!: number;
 
   @ApiProperty({
+    example: 'a1b2c3d4...64hex',
+    description:
+      'PBKDF2 每用户随机盐（hex）；若使用 login/password 且希望客户端本地预哈希，以此作为 salt',
+  })
+  passwordSalt!: string;
+
+  @ApiProperty({
     example: 'acc_5f8e7d6c4b3a',
-    description: 'Account UUID',
+    description: 'Account UUID，后续 login/verify 需要',
   })
   accountUuid!: string;
 
   @ApiProperty({
     example: true,
-    description: '是否为新设备（新设备需输入 Secret Key）',
+    description:
+      '是否需要 Secret Key（新/未信任设备为 true，信任设备为 false）',
   })
   requiresSecretKey!: boolean;
 }
 
-export class LoginVerifyResponseDto {
+// ─── 登录响应 DTO ─────────────────────────────────────────
+
+/** 两种登录方式（SRP login/verify 与 login/password）共用此响应结构 */
+export class LoginResponseDto {
   @ApiProperty({
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
     description: '会话令牌（JWT）',
@@ -91,15 +104,26 @@ export class LoginVerifyResponseDto {
 
   @ApiProperty({
     example: true,
-    description: '是否为新设备',
+    description: '是否为新/未信任设备',
   })
   isNewDevice!: boolean;
 
   @ApiProperty({
     example: 'register_device',
-    description: '下一步操作指引（register_device 或 sync_vaults）',
+    description:
+      '下一步指引：register_device（新设备需注册信任）或 sync_vaults（直接同步）',
   })
   nextStep!: string;
+}
+
+// ─── 密码重置响应 DTO ─────────────────────────────────────
+
+export class PasswordResetCodeResponseDto {
+  @ApiProperty({
+    example: '如果邮箱存在，验证码已发送',
+    description: '模糊提示，防枚举攻击',
+  })
+  message!: string;
 }
 
 // ─── 设备信任响应 DTO ────────────────────────────────────
@@ -118,7 +142,7 @@ export class TrustDeviceResponseDto {
   trustedUntil!: string;
 }
 
-// ─── 会话管理响应 DTOs ───────────────────────────────────
+// ─── 会话管理响应 DTO ────────────────────────────────────
 
 export class SessionRefreshResponseDto {
   @ApiProperty({

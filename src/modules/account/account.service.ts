@@ -72,6 +72,8 @@ export class AccountService {
   async completePasswordReset(params: {
     email: string;
     code: string;
+    passwordEncrypted: string;
+    passwordSalt: string;
     srpSalt: string;
     srpVerifier: string;
     secretKeyFingerprint: string;
@@ -95,10 +97,12 @@ export class AccountService {
       throw new NotFoundException('账户不存在');
     }
 
-    // 更新 SRP 参数
+    // 更新 SRP 参数与 PBKDF2 密码哈希
     await this.prisma.account.update({
       where: { id: account.id },
       data: {
+        passwordEncrypted: params.passwordEncrypted,
+        passwordSalt: params.passwordSalt,
         srpSalt: params.srpSalt,
         srpVerifier: params.srpVerifier,
         secretKeyFingerprint: params.secretKeyFingerprint.toLowerCase(),

@@ -83,4 +83,22 @@ export class CompletePasswordResetDto {
     description: 'PBKDF2 KDF 迭代次数',
   })
   kdfIterations!: number;
+
+  @IsNotEmpty()
+  @IsString()
+  @Matches(/^[a-f0-9]{32,64}$/i)
+  @ApiProperty({
+    example: 'a1b2c3d4e5f6...',
+    description: 'PBKDF2 每用户随机盐（hex，16–32 字节）',
+  })
+  passwordSalt!: string;
+
+  @IsNotEmpty()
+  @IsString()
+  @Matches(/^[a-f0-9]{64}$/i)
+  @ApiProperty({
+    example: 'e7f8...64hex',
+    description: 'PBKDF2 密码哈希（hex，SHA-256 32 字节）',
+  })
+  passwordEncrypted!: string;
 }

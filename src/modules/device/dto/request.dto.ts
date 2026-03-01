@@ -61,18 +61,3 @@ export class TrustDeviceDto {
   })
   pushToken?: string;
 }
-
-/**
- * 注销可信设备请求 DTO
- */
-export class UntrustDeviceDto {
-  @IsNotEmpty()
-  @IsString()
-  @MinLength(64)
-  @MaxLength(64)
-  @ApiProperty({
-    example: 'sha256:abc123...',
-    description: '设备指纹（64字符）',
-  })
-  deviceFingerprint!: string;
-}
